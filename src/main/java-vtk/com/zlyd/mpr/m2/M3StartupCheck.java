@@ -3,6 +3,9 @@ package com.zlyd.mpr.m2;
 import java.awt.Component;
 import java.awt.Container;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import javax.swing.JList;
 import javax.swing.SwingUtilities;
 
@@ -15,9 +18,9 @@ import com.zlyd.mpr.ui.MainFrame;
 import com.zlyd.mpr.util.VtkNativeLoader;
 
 /**
- * 启动默认载入冒烟测试：构造主窗口、触发默认载入，等待后台扫描结束后打印序列数。
+ * 载入冒烟测试：构造主窗口、按命令行参数载入指定影像目录，等待后台扫描结束后打印序列数。
  *
- * <p>须在含形如 {@code 3xxxxxxxx} 影像目录的工作目录下运行。</p>
+ * <p>用法：{@code ... M3StartupCheck <影像目录>}（对应启动脚本 {@code run-app.ps1 <目录>} 的行为）。</p>
  */
 public final class M3StartupCheck {
 
@@ -33,8 +36,13 @@ public final class M3StartupCheck {
     }
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 0 || args[0].isBlank()) {
+            LOG.warn("未提供影像目录，跳过（用法：M3StartupCheck <影像目录>）");
+            return;
+        }
+        Path folder = Paths.get(args[0]);
         MainFrame frame = new MainFrame(new VtkStackView(), new VtkMprView());
-        SwingUtilities.invokeAndWait(frame::loadStartupFolder);
+        SwingUtilities.invokeAndWait(() -> frame.loadFolder(folder));
 
         JList<?> list = findSeriesList(frame);
         if (list == null) {

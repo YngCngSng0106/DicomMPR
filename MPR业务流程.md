@@ -49,13 +49,18 @@
 | 程序入口（EDT 上启动） | `com.zlyd.mpr.App.main` — **[java-vtk]** `App.java:25` |
 | 装配主窗口与两个视图 | `com.zlyd.mpr.App.launch` — **[java-vtk]** `App.java:29` |
 
-**默认载入**：启动时自动载入**当前工作目录**下名字以 `3` 开头的第一个子目录（按名字升序），无匹配则保持空列表、仍可手动选择。
+**载入方式**：**默认不打开任何影像**。影像目录由启动命令/脚本传入：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1                 # 不传：由用户在界面里选
+powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1 D:\dicom\series  # 传目录：启动即打开
+```
 
 | 步骤 | 入口 |
 | --- | --- |
-| 触发默认载入（`setVisible` 之后） | `com.zlyd.mpr.App.launch` — **[java-vtk]** `App.java:34` → `MainFrame.loadStartupFolder` **:72** |
-| 解析目录（纯逻辑，可单测） | `com.zlyd.mpr.ui.StartupFolderResolver.resolve` — **[java]** `:32 / :43`（前缀常量 `DEFAULT_PREFIX="3"` `:24`） |
-| 载入并记为最近目录 | `com.zlyd.mpr.ui.SeriesListPanel.loadDirectory` — **[java]** `:125` |
+| 读取命令行参数（无则空列表） | `com.zlyd.mpr.App.main` — **[java-vtk]** `App.java` → `launch :40` |
+| 有目录则载入，否则提示自行选择 | `com.zlyd.mpr.ui.MainFrame.loadFolder` — **[java]** |
+| 载入并记为最近目录 | `com.zlyd.mpr.ui.SeriesListPanel.loadDirectory` — **[java]** |
 
 | 步骤 | 入口 |
 | --- | --- |
@@ -341,6 +346,6 @@
 | 缩略图校验（M2） | `mvn -q exec:java "-Dexec.mainClass=com.zlyd.mpr.m2.M2ThumbnailCheck" "-Dexec.args=<目录>"` |
 | 体数据/单平面校验 | `com.zlyd.mpr.m2.M2VolumeCheck`（`-Pvtk`） |
 | MPR 校验（离屏 + 方向断言 + HU 采样 + 测量示例） | `com.zlyd.mpr.m2.M3MprCheck`（`-Pvtk`） |
-| 启动 GUI | `powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1` |
+| 启动 GUI | `powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1 [影像目录]` |
 
 > 注意：`mvn test`（默认 profile）会清理 `-Pvtk` 的编译产物；运行 GUI/离屏校验前先执行一次 `mvn -Pvtk -DskipTests compile`（`run-app.ps1` 已包含）。

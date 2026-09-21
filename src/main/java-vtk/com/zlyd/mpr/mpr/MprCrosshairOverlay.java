@@ -56,7 +56,8 @@ public final class MprCrosshairOverlay {
     private static final double MAX_GAP_RATIO = 0.2;
     /** 朝相机方向的微小深度偏移（占视口半高的比例，约 0.5 像素）：避免与切片图像共面被深度测试遮挡。 */
     private static final double DEPTH_OFFSET_RATIO = 0.001;
-    private static final float LINE_WIDTH = 2.0f;
+    /** 线宽（像素）：取原先 2.0 的一半。 */
+    private static final float LINE_WIDTH = 1.0f;
 
     private final vtkRenderer[] renderers;
     private final vtkLineSource[][] sources = new vtkLineSource[VIEW_COUNT][SLOTS_PER_VIEW];

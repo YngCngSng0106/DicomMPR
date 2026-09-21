@@ -53,7 +53,10 @@ public final class M3CrosshairCheck {
     private static final int VIEW_COUNT = MprViewRig.VIEW_COUNT;
     private static final int SIZE = 400;
     private static final int MIN_PIXELS_PER_LINE = 60;
-    private static final int COLOR_TOLERANCE = 45;
+    /** 配色存在性下限（1 像素线在抗锯齿下会被冲淡，只做弱存在性判断）。 */
+    private static final int MIN_COLOR_PIXELS = 8;
+    /** 颜色主导性阈值（抗锯齿混合后仍能区分配色）。 */
+    private static final int COLOR_TOLERANCE = 30;
 
     /** 各视口期望出现的配色（RGB 三元组，顺序：矢状面蓝、冠状面绿、轴位面红 中该视图应有的两条）。 */
     private static final int[][][] EXPECTED_COLORS = {
@@ -122,19 +125,29 @@ public final class M3CrosshairCheck {
             dragRotate(rotations[index], rotations[index + 1]);
         }
         renderWindow.Render();
-        BufferedImage image = export(title);
+        BufferedImage withCrosshair = export(title);
+
+        // 隐藏十字线再渲染一次，用"有/无十字线"的差分统计每条线实际画出的像素（对 1 像素线+抗锯齿也稳定）
+        crosshairs.release();
+        renderWindow.Render();
+        BufferedImage withoutCrosshair = export(title + "_no_crosshair");
 
         LOG.info("{}:", title);
         boolean ok = true;
         for (int view = 0; view < VIEW_COUNT; view++) {
+            int changed = countChanged(withoutCrosshair, withCrosshair, view);
+            boolean pass = changed >= MIN_PIXELS_PER_LINE;
+            ok &= pass;
+            LOG.info("   [{}] 视图{} 十字线像素数（差分）={}", pass ? "PASS" : "FAIL", view, changed);
             for (int[] color : EXPECTED_COLORS[view]) {
-                int count = countColor(image, view, color);
-                boolean pass = count >= MIN_PIXELS_PER_LINE;
-                ok &= pass;
-                LOG.info("   [{}] 视图{} 配色 RGB({},{},{}) 像素数={}", pass ? "PASS" : "FAIL", view,
+                int count = countColor(withCrosshair, withoutCrosshair, view, color);
+                boolean colored = count >= MIN_COLOR_PIXELS;
+                ok &= colored;
+                LOG.info("   [{}] 视图{} 配色 RGB({},{},{}) 像素数={}", colored ? "PASS" : "FAIL", view,
                         color[0], color[1], color[2], count);
             }
         }
+        updateScene();
         return ok;
     }
 
@@ -168,25 +181,65 @@ public final class M3CrosshairCheck {
     }
 
     /**
-     * 统计某视口内与给定 RGB 相近的像素数。
+     * 统计某视口内符合给定配色的像素数。
+     *
+     * <p>线宽 1 像素时抗锯齿会把每个像素与背景混合，因此按**颜色主导性**判断，而不是精确比较 RGB：
+     * 蓝线要求蓝通道明显高于红/绿；绿线要求绿通道明显高于红/蓝；红线要求红通道明显高于绿/蓝。</p>
      */
-    private static int countColor(BufferedImage image, int view, int[] color) {
-        int[] region = region(image, view);
+    private static int countColor(BufferedImage with, BufferedImage without, int view, int[] color) {
+        int[] region = region(with, view);
         int count = 0;
         for (int y = region[2]; y < region[3]; y++) {
             for (int x = region[0]; x < region[1]; x++) {
-                int rgb = image.getRGB(x, y);
-                int red = (rgb >> 16) & 0xFF;
-                int green = (rgb >> 8) & 0xFF;
-                int blue = rgb & 0xFF;
-                if (Math.abs(red - color[0]) <= COLOR_TOLERANCE
-                        && Math.abs(green - color[1]) <= COLOR_TOLERANCE
-                        && Math.abs(blue - color[2]) <= COLOR_TOLERANCE) {
+                int rgb = with.getRGB(x, y);
+                int base = without.getRGB(x, y);
+                if (rgb == base) {
+                    continue;
+                }
+                if (shiftedToward(color, rgb, base)) {
                     count++;
                 }
             }
         }
         return count;
+    }
+
+    /**
+     * 统计某视口内"有/无十字线"两次渲染的差异像素数（即十字线实际覆盖的像素）。
+     */
+    private static int countChanged(BufferedImage without, BufferedImage with, int view) {
+        int[] region = region(with, view);
+        int count = 0;
+        for (int y = region[2]; y < region[3]; y++) {
+            for (int x = region[0]; x < region[1]; x++) {
+                if (with.getRGB(x, y) != without.getRGB(x, y)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 该像素是否因画上此配色而"朝该色偏移"。
+     *
+     * <p>比较"有/无十字线"两次渲染的通道增量（ΔR/ΔG/ΔB）：线宽 1 像素时抗锯齿会与背景混合，
+     * 绝对颜色不可靠，但"相对于背景朝线色偏移"始终成立，且与背景亮度无关。</p>
+     */
+    private static boolean shiftedToward(int[] color, int withRgb, int withoutRgb) {
+        int deltaRed = ((withRgb >> 16) & 0xFF) - ((withoutRgb >> 16) & 0xFF);
+        int deltaGreen = ((withRgb >> 8) & 0xFF) - ((withoutRgb >> 8) & 0xFF);
+        int deltaBlue = (withRgb & 0xFF) - (withoutRgb & 0xFF);
+        int dominant = Math.max(color[0], Math.max(color[1], color[2]));
+        if (color[2] == dominant) {
+            return deltaBlue - deltaRed >= COLOR_TOLERANCE
+                    && deltaBlue - deltaGreen >= COLOR_TOLERANCE;
+        }
+        if (color[1] == dominant) {
+            return deltaGreen - deltaRed >= COLOR_TOLERANCE
+                    && deltaGreen - deltaBlue >= COLOR_TOLERANCE;
+        }
+        return deltaRed - deltaGreen >= COLOR_TOLERANCE && deltaRed - deltaBlue >= COLOR_TOLERANCE;
     }
 
     private static int[] region(BufferedImage image, int view) {

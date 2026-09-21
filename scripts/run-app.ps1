@@ -4,9 +4,12 @@
 # Override with -JdkHome / -ProjectDir / -VtkBuild only on an unusual machine.
 #
 # Usage:
-#   powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1                 # no data dir: pick it in the UI
+#   powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1 <data dir>      # open that data dir on startup
+#   powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1 -DataDir <dir>
 
 param(
+    [Parameter(Position = 0)][string]$DataDir = "",
     [string]$JdkHome    = "",
     [string]$ProjectDir = "",
     [string]$VtkBuild   = ""
@@ -43,7 +46,13 @@ try {
     $env:PATH = "$core;$jni;$JdkHome\bin;$env:PATH"
 
     Write-Host "== launch app =="
-    & (Join-Path $JdkHome "bin\java.exe") "-Djava.library.path=$core;$jni" -cp $cp com.zlyd.mpr.App
+    if ($DataDir) {
+        Write-Host "   data dir: $DataDir"
+        & (Join-Path $JdkHome "bin\java.exe") "-Djava.library.path=$core;$jni" -cp $cp com.zlyd.mpr.App $DataDir
+    } else {
+        Write-Host "   data dir: (none - pick it in the UI)"
+        & (Join-Path $JdkHome "bin\java.exe") "-Djava.library.path=$core;$jni" -cp $cp com.zlyd.mpr.App
+    }
 } finally {
     Pop-Location
 }

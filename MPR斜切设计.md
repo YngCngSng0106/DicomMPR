@@ -144,6 +144,7 @@
 - 十字线：线段端点按**视口矩形**裁剪（`ScreenFrame`：焦点 + 屏幕右/上 + 视口半宽高），因此**恒铺满整个视图展示区**、且只要线经过画面就不会消失（此前按体数据包围盒裁剪，斜切/偏心时会整条消失）。
 - 视图背景：三视图统一**纯黑**（`SetBackground(0,0,0)`）。
 - 十字线不受遮挡：绘制时沿"朝相机方向"平移 `0.001 × 视口半高`（≈0.5 像素），使其始终压在切片图像之上（几何与命中判定仍用未偏移的线段）。
+- 十字线线宽：`MprCrosshairOverlay.LINE_WIDTH = 1.0f` 像素（原先 2.0，按要求减半）。
 - 十字线不被裁掉：`applyFrame` 在更新十字线后刷新各视图裁剪范围（线会延伸到视口边缘，比体数据更长）。
 
 ---
@@ -244,9 +245,13 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -DataDir J:\workspac
 # 2) 只跑某个离屏检查（会先 -Pvtk 编译）
 powershell -ExecutionPolicy Bypass -File scripts\run-check.ps1 -MainClass com.zlyd.mpr.m2.M0ResliceSmoke -Args J:\workspace\DicomMPR\3120221229008001
 
-# 3) 启动 GUI 手测
+# 3) 启动 GUI 手测（不带目录=启动后自行选择；带目录=启动即打开）
 powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
+powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1 J:\workspace\DicomMPR\3120221229008001
 ```
+
+> 另有一个会短暂弹窗的检查（需真实 GL 上下文）：`M3ReopenCheck`（清理缓存/关闭页面/重新打开），
+> 用 `run-check.ps1 -MainClass com.zlyd.mpr.m2.M3ReopenCheck -Args <数据>` 单独运行。
 
 只想跑某几个单测：`mvn -B test -Dtest=MprCursorFrameTest,MprViewRigTest`。
 只看规范：`scripts\verify.ps1 -StandardsOnly`。

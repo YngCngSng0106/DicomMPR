@@ -1,7 +1,7 @@
 package com.zlyd.mpr.ui;
 
 import java.awt.CardLayout;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -72,14 +72,16 @@ public final class MainFrame extends JFrame {
     }
 
     /**
-     * 启动时默认载入当前工作目录下以 "3" 开头的影像目录（无匹配则保持空列表，仍可手动选择）。
+     * 载入指定影像目录（启动脚本/命令行传入；不传则列表保持空、由用户自行选择）。
+     *
+     * @param folder 影像目录
      */
-    public void loadStartupFolder() {
-        StartupFolderResolver.resolve(Paths.get(System.getProperty("user.dir")))
-                .ifPresentOrElse(path -> {
-                    LOG.info("启动默认载入: {}", path);
-                    listPanel.loadDirectory(path);
-                }, () -> LOG.info("当前目录下未找到 3 开头的影像目录，保持空列表"));
+    public void loadFolder(Path folder) {
+        if (folder == null) {
+            return;
+        }
+        LOG.info("载入影像目录: {}", folder);
+        listPanel.loadDirectory(folder);
     }
 
     public SeriesView getStackView() {

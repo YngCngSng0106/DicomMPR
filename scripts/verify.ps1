@@ -87,7 +87,7 @@ try {
         $checks = @(
             @{ Class = "com.zlyd.mpr.m2.M2VolumeCheck";  Args = $dataArgs },
             @{ Class = "com.zlyd.mpr.m2.M3MprCheck";     Args = $dataArgs },
-            @{ Class = "com.zlyd.mpr.m2.M3StartupCheck"; Args = @() },
+            @{ Class = "com.zlyd.mpr.m2.M3StartupCheck"; Args = $dataArgs },
             @{ Class = "com.zlyd.mpr.m2.M0ResliceSmoke"; Args = $dataArgs },
             @{ Class = "com.zlyd.mpr.m2.M3RigCheck";     Args = $dataArgs },
             @{ Class = "com.zlyd.mpr.m2.M3FreezeCheck"; Args = $dataArgs },
