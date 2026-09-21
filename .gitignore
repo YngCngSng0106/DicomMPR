@@ -1,0 +1,21 @@
+# Maven
+target/
+
+# VTK 源码与构建产物（体积巨大，不入库）
+third_party/
+
+# 运行时临时文件
+cp.txt
+*.log
+vtkError.txt
+
+# DICOM 测试影像数据（体积大，不入库）
+3120221229008001/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
