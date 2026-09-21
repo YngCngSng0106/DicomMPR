@@ -91,6 +91,7 @@ try {
             @{ Class = "com.zlyd.mpr.m2.M0ResliceSmoke"; Args = $dataArgs },
             @{ Class = "com.zlyd.mpr.m2.M3RigCheck";     Args = $dataArgs },
             @{ Class = "com.zlyd.mpr.m2.M3FreezeCheck"; Args = $dataArgs },
+            @{ Class = "com.zlyd.mpr.m2.M3CrosshairCheck"; Args = $dataArgs },
             @{ Class = "com.zlyd.mpr.m2.M3ResliceCheck"; Args = $dataArgs }
         )
         foreach ($check in $checks) {

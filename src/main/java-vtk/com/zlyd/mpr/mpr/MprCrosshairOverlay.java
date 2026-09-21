@@ -54,6 +54,8 @@ public final class MprCrosshairOverlay {
     private static final double GAP_HALF_PIXELS = 5.0;
     private static final int FALLBACK_VIEW_HEIGHT = 320;
     private static final double MAX_GAP_RATIO = 0.2;
+    /** 朝相机方向的微小深度偏移（占视口半高的比例，约 0.5 像素）：避免与切片图像共面被深度测试遮挡。 */
+    private static final double DEPTH_OFFSET_RATIO = 0.001;
     private static final float LINE_WIDTH = 2.0f;
 
     private final vtkRenderer[] renderers;
@@ -101,7 +103,7 @@ public final class MprCrosshairOverlay {
         }
         List<CrosshairSegment> segments = CrosshairGeometry.compute(frame, screens, gaps(screens));
         for (CrosshairSegment segment : segments) {
-            apply(segment);
+            apply(segment, screens[segment.getView()]);
         }
         return segments;
     }
@@ -133,13 +135,25 @@ public final class MprCrosshairOverlay {
         return gaps;
     }
 
-    private void apply(CrosshairSegment segment) {
+    private void apply(CrosshairSegment segment, ScreenFrame screen) {
         int slot = segment.getLine() * CrosshairGeometry.SEGMENT_COUNT + segment.getSegment();
-        double[] start = segment.getStart();
-        double[] end = segment.getEnd();
+        double offset = DEPTH_OFFSET_RATIO * screen.getHalfHeight();
+        double[] start = towardCamera(segment.getStart(), screen, offset);
+        double[] end = towardCamera(segment.getEnd(), screen, offset);
         sources[segment.getView()][slot].SetPoint1(start[0], start[1], start[2]);
         sources[segment.getView()][slot].SetPoint2(end[0], end[1], end[2]);
         actors[segment.getView()][slot].SetVisibility(segment.isVisible() ? 1 : 0);
+    }
+
+    /**
+     * 把点沿"朝相机"方向（−视线方向）平移，使十字线始终压在切片图像之上。
+     */
+    private static double[] towardCamera(double[] point, ScreenFrame screen, double offset) {
+        double[] direction = screen.getViewDirection();
+        return new double[]{
+                point[0] - direction[0] * offset,
+                point[1] - direction[1] * offset,
+                point[2] - direction[2] * offset};
     }
 
 }

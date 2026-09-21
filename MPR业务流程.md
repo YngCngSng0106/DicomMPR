@@ -165,7 +165,7 @@
 | --- | --- |
 | 相机配置（三视图方向 + 填满窗格） | `com.zlyd.mpr.mpr.MprCameraController.configure` — **[java-vtk]** `MprCameraController.java:32` |
 | 应用中心点（切面号 + 十字线 + 渲染） | `com.zlyd.mpr.mpr.MprScene.applyCenter` — **[java-vtk]** `MprScene.java:339` |
-| 十字线绘制（按视口矩形裁剪，铺满视图区；恒不消失） | `MprCrosshairOverlay.update` `:95` / `screenFrame` / `gaps`；纯数学 `geometry/CrosshairGeometry` + `geometry/ScreenFrame` |
+| 十字线绘制（按视口矩形裁剪、铺满视图区、恒不被遮挡/裁掉） | `MprCrosshairOverlay.update` / `screenFrame` / `gaps` / `apply`（朝相机微偏移 0.5px）；纯数学 `geometry/CrosshairGeometry` + `geometry/ScreenFrame`；`MprScene.applyFrame` 更新后重算裁剪范围 |
 | 方向标记刷新 | `com.zlyd.mpr.mpr.MprScene.updateOrientationMarkers` — **[java-vtk]** `MprScene.java:158` |
 
 **显示方向约定**（`com.zlyd.mpr.geometry.MprViewOrientation`，相机与标记共用）

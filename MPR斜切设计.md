@@ -143,6 +143,8 @@
 - 方向标记：按屏幕 up/right 的实际世界向量取主导轴；斜切时标签为近似值。
 - 十字线：线段端点按**视口矩形**裁剪（`ScreenFrame`：焦点 + 屏幕右/上 + 视口半宽高），因此**恒铺满整个视图展示区**、且只要线经过画面就不会消失（此前按体数据包围盒裁剪，斜切/偏心时会整条消失）。
 - 视图背景：三视图统一**纯黑**（`SetBackground(0,0,0)`）。
+- 十字线不受遮挡：绘制时沿"朝相机方向"平移 `0.001 × 视口半高`（≈0.5 像素），使其始终压在切片图像之上（几何与命中判定仍用未偏移的线段）。
+- 十字线不被裁掉：`applyFrame` 在更新十字线后刷新各视图裁剪范围（线会延伸到视口边缘，比体数据更长）。
 
 ---
 
@@ -212,6 +214,8 @@
 | 旋转时**十字线可能整条消失** | 线段原本按**体数据包围盒**裁剪：斜切/偏心后痕迹线与包围盒可能没有交点 ⇒ 直接判为不可见 | 改为按**视口矩形**裁剪（新增纯数学 `geometry/ScreenFrame` + `CrosshairGeometry.clipToRect`）：只要线通过画面内就一定有交点，结构上不会消失 |
 | 十字线希望**铺满整个视图展示区** | 同上（原来最多只到体数据边界） | 线段的两个外侧端点落在视口边界上（`CrosshairGeometryTest.shouldSpanWholeViewportForAxisAlignedFrame` 逐点断言 = 交点 ± 半宽/半高）|
 | 视图背景希望**纯黑** | 原来三个视图用深灰/深绿/深蓝区分 | `MprScene.configureViewports` 统一 `SetBackground(0,0,0)` |
+| 旋转时十字线**被切片图像遮挡** | 十字线与切片图像**完全共面** ⇒ 深度测试平手，图像（先加入 renderer）压掉了线 | 绘制时把线沿"朝相机方向"（−视线）平移 `0.001 × 半高`（≈0.5 像素，`MprCrosshairOverlay.apply`）；几何/命中判定仍用未偏移的数学线段，互不影响 |
+| 旋转时十字线**整段不显示** | 线现在延伸到**视口边缘**（比体数据更长），而相机近/远裁剪面是按"更新十字线之前"的演员包围盒算的 ⇒ 远端被裁掉 | `MprScene.applyFrame` 在 `crosshairs.update` 之后对三个 renderer 各调一次 `ResetCameraClippingRange()` |
 | 疑似"被转视图变了"（离屏校验报 FAIL） | 校验脚本的视口像素区域坐标写错（矢状视口 y 区间为空），并非软件缺陷 | 修正区域映射；新增 `M3FreezeCheck`：模拟连续拖动后比对被转视口像素，**逐点差 0**，并带"同状态连导两次"自比对照 |
 
 ---
@@ -260,6 +264,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1
 | S7 | `run-check.ps1 -MainClass ...M3ResliceCheck` + GUI | 斜切前后把鼠标放在十字线交点上：HU 读数不变；斜切时测量工具禁用并提示 | PASS + 人工确认 |
 | S8 | `run-check.ps1 -MainClass ...M3ResliceCheck -Args <数据>` | 三个 90° 用例逐条 `[PASS]`（§4 三表、交点位移 0.000000、十字线平行屏幕轴、被转视图冻结、十字线转 90.00°）+ `target\reslice\s8_view{0,1,2}_90.png` | 全 PASS，PNG 方向可目视核对 |
 | S8b | `run-check.ps1 -MainClass ...M3FreezeCheck -Args <数据>` | 每例的"自比对照"/"被转视口"最大灰度差 + "拖动中三视图取景冻结" | 灰度差均为 0；取景 scale 前后完全一致（`[PASS]`） |
+| S8c | `run-check.ps1 -MainClass ...M3CrosshairCheck -Args <数据>` | 4 个状态（0°/轴位 90°/再转冠状 −60°/再转矢状 120°）× 各视口 2 种配色的**像素数** | 每条线 ≥ 60 像素（实测 330~780），全 PASS |
 | S9 | `verify.ps1 -DataDir <数据>` | 四段输出与末行 `VERIFY OK` | OK |
 
 > `verify.ps1` 对**尚未实现**的检查会打印 `-- skip ... (not built yet)`，所以任何阶段都能安全地跑一键验证。

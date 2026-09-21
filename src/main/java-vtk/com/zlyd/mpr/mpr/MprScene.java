@@ -364,6 +364,10 @@ final class MprScene {
     private void applyFrame() {
         planeActors.update(frame);
         crosshairSegments = crosshairs.update(frame);
+        // 十字线会延伸到视口边缘（比体数据更长）：按其包围盒重算近/远裁剪面，否则远端会被裁掉
+        for (int view = 0; view < VIEW_COUNT; view++) {
+            renderers[view].ResetCameraClippingRange();
+        }
         updateOrientationMarkers();
         render();
     }
