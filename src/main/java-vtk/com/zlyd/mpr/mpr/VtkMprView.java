@@ -2,6 +2,7 @@ package com.zlyd.mpr.mpr;
 
 import java.awt.event.KeyEvent;
 
+import javax.swing.JButton;
 import javax.swing.SwingUtilities;
 
 import org.apache.commons.lang3.StringUtils;
@@ -41,6 +42,7 @@ public final class VtkMprView extends VtkViewPanel {
     private final MeasurementToolbar measurementToolbar = new MeasurementToolbar();
 
     private SeriesInfo series;
+    private Runnable closeListener;
     private VoxelProbe lastProbe;
     private DragMode dragMode = DragMode.NONE;
     private int rotationView = -1;
@@ -58,6 +60,7 @@ public final class VtkMprView extends VtkViewPanel {
         measurementToolbar.setToolListener(scene::setMeasurementTool);
         measurementToolbar.setClearListener(this::clearMeasurements);
         getPrimaryRow().add(windowLevelToolbar);
+        getPrimaryRow().add(createClearButton());
         addToolbarRow(measurementToolbar);
 
         getInteractor().AddObserver("MouseWheelForwardEvent", this, "onWheelForward");
@@ -67,6 +70,65 @@ public final class VtkMprView extends VtkViewPanel {
         getInteractor().AddObserver("RightButtonPressEvent", this, "onRightButtonDown");
         getInteractor().AddObserver("RightButtonReleaseEvent", this, "onRightButtonUp");
         getInteractor().AddObserver("MouseMoveEvent", this, "onMouseMove");
+    }
+
+    private JButton createClearButton() {
+        JButton button = new JButton("清理缓存");
+        button.setToolTipText("释放 MPR 已载入的体数据与测量，关闭本页面（之后可重新打开 MPR）");
+        button.addActionListener(event -> clearVolumeAndClose());
+        return button;
+    }
+
+    @Override
+    public void setCloseRequestListener(Runnable listener) {
+        this.closeListener = listener;
+    }
+
+    /**
+     * 请求关闭本视图页面（清理由按钮触发时使用；自动清理不会关闭页面）。
+     */
+    private void notifyCloseRequest() {
+        if (closeListener != null) {
+            closeListener.run();
+        }
+    }
+
+    /**
+     * 清理 MPR 缓存：释放体数据/几何/测量并回到未载入状态；再次打开 MPR 会重新构建体数据。
+     */
+    public void clearVolume() {
+        series = null;
+        lastProbe = null;
+        dragMode = DragMode.NONE;
+        rotationView = -1;
+        scene.clearVolume();
+        measurementToolbar.setResultText(null);
+        refreshMeasurementAvailability();
+        updateStatus();
+    }
+
+    /**
+     * 清理缓存**并请求关闭本页面**（工具条「清理缓存」按钮使用）：
+     * 释放体数据/测量后切回默认页面，之后可重新打开 MPR。
+     */
+    public void clearVolumeAndClose() {
+        clearVolume();
+        notifyCloseRequest();
+    }
+
+    /**
+     * 重新打开（或切换）序列前，先清掉上一次的体数据缓存（不关闭页面）。
+     */
+    @Override
+    protected void onBeforeVolumeLoad() {
+        clearVolume();
+    }
+
+    /**
+     * 当前是否已载入体数据（供离屏校验与外部查询）。
+     */
+    public boolean isVolumeReady() {
+        return scene.isVolumeReady();
     }
 
     @Override

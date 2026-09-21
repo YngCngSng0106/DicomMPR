@@ -289,6 +289,9 @@
 **斜切下的测量**：暂不支持（`frame` 非轴对齐时工具条禁用并提示；见 `MeasurementToolbar.setOblique`）。
 **旋转拖动中的取景**：`beginRotation` 冻结三视图 `parallelScale`，**松手后继续保持冻结**（画面尺寸不随旋转改变，允许斜切面四角被裁）；`R` 重置、`A` 回正、改变窗口尺寸才会重新取景（见 `MPR斜切设计.md` D1）。
 **屏幕上方（up）的取法**：`MprCameraController.chooseUp` 把该视图**上一次的 up 连续投影**到新平面（`MprViewRig.projectOntoPlane`），避免"先转某视图 90° 再碰另一个视图时它瞬间歪掉"；装载/重置用机架轴。
+
+**清理缓存 / 重新打开**：工具条第 1 行「**清理缓存**」按钮，或每次载入序列前自动清理（`VtkViewPanel.onBeforeVolumeLoad` → `VtkMprView.clearVolume`）→ 释放体数据引用与测量、回到未载入状态，可反复重新打开 MPR。实现见 `MprScene.clearVolume`、`MprSlicePlaneActors.release`（把 mapper 输入换成 1×1×1 占位体数据，**不能用 `RemoveAllInputs()`**——在 mapper 上会抛 C++ 异常）、`MprCrosshairOverlay.release`、`MprMeasurementController.release`。实测：清理并 GC 后占用从 243.9MB 降到 10.1MB。
+**离屏校验**：`M3ReopenCheck`（载入→清理→再载入→再清理→再载入全部 PASS；会短暂弹窗，因为 MPR 的 canvas 必须已显示才有有效 GL 上下文，故不纳入无界面一键校验）。
 **离屏验收**：`M3ResliceCheck`（§4 三表逐条断言 + 交点钉住 + 十字线屏幕对齐 + 被转视图冻结 + PNG 导出）；`M3RigCheck`（累积旋转下 C 钉住 / 相机冻结 / 相机正对平面）。
 
 ---

@@ -123,6 +123,17 @@ public final class MprCrosshairOverlay {
                 scale * aspect, scale);
     }
 
+    /**
+     * 隐藏全部十字线（清理 MPR 缓存用）。
+     */
+    public void release() {
+        for (int view = 0; view < VIEW_COUNT; view++) {
+            for (int slot = 0; slot < SLOTS_PER_VIEW; slot++) {
+                actors[view][slot].SetVisibility(0);
+            }
+        }
+    }
+
     private double[] gaps(ScreenFrame[] screens) {
         double[] gaps = new double[VIEW_COUNT];
         for (int view = 0; view < VIEW_COUNT; view++) {

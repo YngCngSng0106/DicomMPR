@@ -104,6 +104,25 @@ final class MprScene {
     }
 
     /**
+     * 清理 MPR 缓存：释放体数据引用、隐藏切片/十字线/测量，回到"未载入"状态；之后可重新打开 MPR。
+     *
+     * <p>切片 mapper 的输入会被切断（`RemoveAllInputs`），配合置空体数据/几何引用，
+     * 使大体积体数据（short 数组）尽快被回收；所有交互因 `volumeReady=false` 自动失效。</p>
+     */
+    void clearVolume() {
+        planeActors.release();
+        crosshairs.release();
+        measurementController.release();
+        crosshairSegments = List.of();
+        volumeProbe = null;
+        geometry = null;
+        frame = null;
+        box = null;
+        volumeReady = false;
+        render();
+    }
+
+    /**
      * 设置窗宽窗位并联动到三个视图（E1）。
      */
     void setWindowLevel(WindowLevel level) {

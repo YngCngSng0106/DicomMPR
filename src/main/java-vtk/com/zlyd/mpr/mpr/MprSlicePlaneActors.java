@@ -8,6 +8,7 @@ import vtk.vtkImageInterpolator;
 import vtk.vtkImageResliceMapper;
 import vtk.vtkImageSlice;
 import vtk.vtkPlane;
+import vtk.vtkShortArray;
 import vtk.vtkRenderer;
 
 /**
@@ -62,6 +63,36 @@ final class MprSlicePlaneActors {
         for (int view = 0; view < VIEW_COUNT; view++) {
             mappers[view].SetInputData(volume);
         }
+    }
+
+    /**
+     * 释放体数据引用并隐藏切片（清理 MPR 缓存用）。
+     *
+     * <p>注意：不能用 {@code RemoveAllInputs()}（该方法要求端口式输入，在 mapper 上会抛 C++ 异常），
+     * 这里把输入替换成 1×1×1 的占位体数据，从而切断对大体积体数据的引用、便于内存回收。</p>
+     */
+    void release() {
+        vtkImageData placeholder = placeholderVolume();
+        for (int view = 0; view < VIEW_COUNT; view++) {
+            mappers[view].SetInputData(placeholder);
+            slices[view].SetVisibility(0);
+        }
+    }
+
+    /**
+     * 1×1×1、单值 0 的占位体数据（避免 mapper 处于"无输入/无标量"的异常状态）。
+     */
+    private static vtkImageData placeholderVolume() {
+        vtkImageData image = new vtkImageData();
+        image.SetDimensions(1, 1, 1);
+        image.SetSpacing(1.0, 1.0, 1.0);
+        image.SetOrigin(0.0, 0.0, 0.0);
+        vtkShortArray scalars = new vtkShortArray();
+        scalars.SetNumberOfComponents(1);
+        scalars.SetNumberOfTuples(1);
+        scalars.SetTuple1(0, 0);
+        image.GetPointData().SetScalars(scalars);
+        return image;
     }
 
     /**

@@ -8,6 +8,8 @@ third_party/
 cp.txt
 *.log
 vtkError.txt
+hs_err_pid*.log
+*.hprof
 
 # DICOM 测试影像数据（体积大，不入库）
 3120221229008001/

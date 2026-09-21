@@ -50,6 +50,11 @@ public final class MainFrame extends JFrame {
             cardLayout.show(rightPanel, CARD_MPR);
         });
 
+        if (mprView != null) {
+            // 视图清理缓存后请求关闭其页面：切回默认（2D 阅片）页面
+            mprView.setCloseRequestListener(() -> cardLayout.show(rightPanel, CARD_STACK));
+        }
+
         rightPanel.add(stackView.getComponent(), CARD_STACK);
         if (mprView != null) {
             rightPanel.add(mprView.getComponent(), CARD_MPR);

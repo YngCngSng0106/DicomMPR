@@ -22,4 +22,15 @@ public interface SeriesView {
      * @param series 序列
      */
     void showSeries(SeriesInfo series);
+
+    /**
+     * 注册"请求关闭本视图页面"的回调（例如视图清空自身缓存后希望切回默认页面）。
+     *
+     * <p>默认不做处理；实现类可覆盖。放在本接口上是为了让 {@code MainFrame}（不含 VTK 的模块）
+     * 也能在不知道具体实现类型的情况下接线。</p>
+     *
+     * @param listener 回调（在 EDT 执行）
+     */
+    default void setCloseRequestListener(Runnable listener) {
+    }
 }

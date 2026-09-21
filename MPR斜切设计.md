@@ -216,6 +216,7 @@
 | 视图背景希望**纯黑** | 原来三个视图用深灰/深绿/深蓝区分 | `MprScene.configureViewports` 统一 `SetBackground(0,0,0)` |
 | 旋转时十字线**被切片图像遮挡** | 十字线与切片图像**完全共面** ⇒ 深度测试平手，图像（先加入 renderer）压掉了线 | 绘制时把线沿"朝相机方向"（−视线）平移 `0.001 × 半高`（≈0.5 像素，`MprCrosshairOverlay.apply`）；几何/命中判定仍用未偏移的数学线段，互不影响 |
 | 旋转时十字线**整段不显示** | 线现在延伸到**视口边缘**（比体数据更长），而相机近/远裁剪面是按"更新十字线之前"的演员包围盒算的 ⇒ 远端被裁掉 | `MprScene.applyFrame` 在 `crosshairs.update` 之后对三个 renderer 各调一次 `ResetCameraClippingRange()` |
+| 需要**清理 MPR 缓存**以便重新打开 | 体数据（512×512×447 short ≈ 234MB）被 mapper 持有，长时间不释放；切序列时旧状态残留 | 新增「清理缓存」按钮 + 载入前自动清理：`MprScene.clearVolume` → `MprSlicePlaneActors.release`（输入换成 1×1×1 占位体数据；`RemoveAllInputs()` 在 mapper 上会抛 C++ 异常，不可用）/`MprCrosshairOverlay.release`/`MprMeasurementController.release`；`M3ReopenCheck` 实测清理+GC 后 243.9MB → **10.1MB**，且可反复重开 |
 | 疑似"被转视图变了"（离屏校验报 FAIL） | 校验脚本的视口像素区域坐标写错（矢状视口 y 区间为空），并非软件缺陷 | 修正区域映射；新增 `M3FreezeCheck`：模拟连续拖动后比对被转视口像素，**逐点差 0**，并带"同状态连导两次"自比对照 |
 
 ---

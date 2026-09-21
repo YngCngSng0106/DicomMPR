@@ -124,6 +124,15 @@ final class MprMeasurementController {
         overlay.clear();
     }
 
+    /**
+     * 释放体数据引用与全部测量（清理 MPR 缓存用）。
+     */
+    void release() {
+        clear();
+        geometry = null;
+        probe = null;
+    }
+
     void refresh() {
         overlay.refresh();
     }

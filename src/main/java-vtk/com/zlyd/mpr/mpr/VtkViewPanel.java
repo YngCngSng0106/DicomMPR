@@ -156,6 +156,8 @@ public abstract class VtkViewPanel extends JPanel implements SeriesView {
 
     @Override
     public final void showSeries(SeriesInfo series) {
+        // 载入前先清理上一次的体数据缓存（子类可覆盖），保证重新打开干净、内存可回收
+        onBeforeVolumeLoad();
         if (series == null) {
             return;
         }
@@ -185,6 +187,12 @@ public abstract class VtkViewPanel extends JPanel implements SeriesView {
                 }
             }
         }.execute();
+    }
+
+    /**
+     * 每次载入序列前的清理钩子（在 EDT 执行）；子类可在此释放上一次的体数据缓存。
+     */
+    protected void onBeforeVolumeLoad() {
     }
 
     /**
