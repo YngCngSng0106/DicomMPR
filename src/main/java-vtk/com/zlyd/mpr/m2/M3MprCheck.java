@@ -151,7 +151,6 @@ public final class M3MprCheck {
     private void configureSampleMeasurements() {
         MprMeasurementOverlay overlay =
                 new MprMeasurementOverlay(renderers, new MprViewMapper(interactor, renderers));
-        overlay.setGeometry(geometry);
         int centerI = geometry.getColumns() / 2;
         int centerJ = geometry.getRows() / 2;
         int centerK = geometry.getSlices() / 2;

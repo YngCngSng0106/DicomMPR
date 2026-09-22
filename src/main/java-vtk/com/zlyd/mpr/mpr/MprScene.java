@@ -75,7 +75,7 @@ final class MprScene {
         viewMapper = new MprViewMapper(interactor, renderers);
         markers = new VtkOrientationMarkers(renderers);
         MprMeasurementOverlay overlay = new MprMeasurementOverlay(renderers, viewMapper);
-        measurementController = new MprMeasurementController(viewMapper, overlay);
+        measurementController = new MprMeasurementController(viewMapper, overlay, renderers);
         windowLevelController = new MprWindowLevelController(canvas, planeActors.slices());
     }
 
@@ -180,6 +180,8 @@ final class MprScene {
         double target = clamp(current + wheelDirection * sliceDirectionSign(view) * step,
                 -halfExtent, halfExtent);
         frame = frame.withOffset(view, target - current);
+        // 翻层后平面已变，未完成的测量作废
+        measurementController.cancel();
         cameraController.captureAnchors(frame, MprCameraController.allViews());
         applyFrame();
     }
@@ -228,6 +230,9 @@ final class MprScene {
             return;
         }
         frame = frame.rotate(view, radians);
+        // 旋转后本视图平面不变（测量保留），其他视图平面已变，其测量清空；未完成的测量作废
+        measurementController.cancel();
+        measurementController.clearOtherViews(view);
         cameraController.captureAnchors(frame, new int[]{view});
         cameraController.configure(frame, box, rig, others(view));
         applyFrame();
@@ -306,6 +311,8 @@ final class MprScene {
     void render() {
         measurementController.refresh();
         canvas.Render();
+        // Render() 只更新 VTK 缓冲；按钮/按键触发的刷新需显式请求 AWT 重绘（鼠标事件本身会重绘）
+        canvas.repaint();
     }
 
     /**
@@ -348,9 +355,109 @@ final class MprScene {
      * 记录一个测量点（左键落点）。
      */
     void addMeasurementPoint(int displayX, int displayY) {
-        int[] center = centerIndex();
-        measurementController.addPoint(displayX, displayY, center[0], center[1], center[2]);
+        measurementController.addPoint(displayX, displayY);
         render();
+    }
+
+    /**
+     * 结束曲线（双击 / Enter）。
+     */
+    void finishMeasurementCurve() {
+        measurementController.finishCurve();
+        render();
+    }
+
+    /**
+     * 自由形状：按下开始描画。
+     */
+    void beginFreehand(int displayX, int displayY) {
+        measurementController.beginFreehand(displayX, displayY);
+        render();
+    }
+
+    /**
+     * 自由形状：拖动追加点。
+     */
+    void extendFreehand(int displayX, int displayY) {
+        measurementController.extendFreehand(displayX, displayY);
+        render();
+    }
+
+    /**
+     * 自由形状：松开闭合。
+     */
+    void endFreehand() {
+        measurementController.endFreehand();
+        render();
+    }
+
+    /**
+     * 选中指针附近的测量（十字线模式下使用）。
+     */
+    void selectMeasurementAt(int displayX, int displayY) {
+        measurementController.selectAt(displayX, displayY);
+        render();
+    }
+
+    /**
+     * 选中指针附近的测量；命中返回 true（调用方据此决定是否还要跳转中心）。
+     */
+    boolean trySelectMeasurement(int displayX, int displayY) {
+        boolean selected = measurementController.trySelect(displayX, displayY);
+        render();
+        return selected;
+    }
+
+    /**
+     * 悬停选中：指针移到图形上时选中它；返回选中项是否变化。
+     */
+    boolean hoverMeasurement(int displayX, int displayY) {
+        boolean changed = measurementController.hoverSelect(displayX, displayY);
+        if (changed) {
+            render();
+        }
+        return changed;
+    }
+
+    /**
+     * 开始拖动移动图形（命中返回 true）。
+     */
+    boolean beginMoveMeasurement(int displayX, int displayY) {
+        boolean hit = measurementController.beginMoveShape(displayX, displayY);
+        render();
+        return hit;
+    }
+
+    /**
+     * 拖动移动图形。
+     */
+    void updateMoveMeasurement(int displayX, int displayY) {
+        measurementController.updateMoveShape(displayX, displayY);
+        render();
+    }
+
+    /**
+     * 结束移动图形（重算数值与 HU 统计）。
+     */
+    void endMoveMeasurement() {
+        measurementController.endMoveShape();
+        render();
+    }
+
+    /**
+     * 删除选中的测量；未选中返回 false。
+     */
+    boolean deleteSelectedMeasurement() {
+        boolean deleted = measurementController.deleteSelected();
+        render();
+        return deleted;
+    }
+
+    /**
+     * 当前选中的测量（无则 null）。
+     */
+    Measurement getSelectedMeasurement() {
+        return measurementController.getSelectedMeasurement();
     }
 
     /**

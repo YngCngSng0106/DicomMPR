@@ -9,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import com.zlyd.mpr.dicom.SeriesInfo;
 import com.zlyd.mpr.geometry.Measurement;
+import com.zlyd.mpr.geometry.MeasurementType;
 import com.zlyd.mpr.geometry.MprCursorFrame;
 import com.zlyd.mpr.geometry.VoxelProbe;
 import com.zlyd.mpr.ui.MeasurementToolbar;
@@ -26,15 +27,16 @@ import com.zlyd.mpr.util.MeasurementFormatter;
  *   <li>右键拖动调窗宽窗位；滚轮/↑↓ 翻层（沿平面法向）；<code>R</code> 重置；<code>A</code> 回正。</li>
  * </ul>
  */
-public final class VtkMprView extends VtkViewPanel {
+public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar.Listener {
 
     private static final long serialVersionUID = 1L;
     private static final int CLICK_MOVE_THRESHOLD = 3;
+    private static final long DOUBLE_CLICK_MILLIS = 400;
     private static final double ROTATE_MIN_RADIUS_PIXELS = 8.0;
 
     /** 左键拖动模式。 */
     private enum DragMode {
-        NONE, MOVE_CENTER, ROTATE
+        NONE, MOVE_CENTER, ROTATE, DRAW, MOVE_SHAPE
     }
 
     private final MprScene scene;
@@ -47,6 +49,9 @@ public final class VtkMprView extends VtkViewPanel {
     private DragMode dragMode = DragMode.NONE;
     private int rotationView = -1;
     private double lastRotationAngle = Double.NaN;
+    private long lastCurveClickTime;
+    private int lastCurveClickX = -1;
+    private int lastCurveClickY = -1;
     private boolean rightDown;
     private int pressX;
     private int pressY;
@@ -57,8 +62,7 @@ public final class VtkMprView extends VtkViewPanel {
         super("在左侧序列上右键，选择「MPR」打开三视图");
         scene = new MprScene(getCanvas());
         windowLevelToolbar.setWindowLevelListener(scene::setWindowLevel);
-        measurementToolbar.setToolListener(scene::setMeasurementTool);
-        measurementToolbar.setClearListener(this::clearMeasurements);
+        measurementToolbar.setListener(this);
         getPrimaryRow().add(windowLevelToolbar);
         getPrimaryRow().add(createClearButton());
         addToolbarRow(measurementToolbar);
@@ -103,7 +107,7 @@ public final class VtkMprView extends VtkViewPanel {
         rotationView = -1;
         scene.clearVolume();
         measurementToolbar.setResultText(null);
-        refreshMeasurementAvailability();
+        updateMeasurementUi();
         updateStatus();
     }
 
@@ -136,7 +140,7 @@ public final class VtkMprView extends VtkViewPanel {
         this.series = target;
         scene.setVolume(volume, target);
         windowLevelToolbar.setCurrent(scene.getWindowLevel());
-        refreshMeasurementAvailability();
+        updateMeasurementUi();
         updateStatus();
         requestCanvasFocus();
         // 布局稳定后再取景/刷新一次，保证首帧就画出三个视图与十字线
@@ -164,13 +168,23 @@ public final class VtkMprView extends VtkViewPanel {
                 break;
             case KeyEvent.VK_R:
                 scene.resetView();
-                refreshMeasurementAvailability();
+                updateMeasurementUi();
                 updateStatus();
+                break;
+            case KeyEvent.VK_DELETE:
+                deleteSelectedMeasurement();
+                break;
+            case KeyEvent.VK_ESCAPE:
+                exitMeasurementMode();
+                break;
+            case KeyEvent.VK_ENTER:
+                scene.finishMeasurementCurve();
+                updateMeasurementResult();
                 break;
             case KeyEvent.VK_A:
                 // 回正：把各视图 up 摆回最贴近解剖习惯的方向
                 scene.alignRig();
-                refreshMeasurementAvailability();
+                updateMeasurementUi();
                 updateStatus();
                 break;
             default:
@@ -193,22 +207,41 @@ public final class VtkMprView extends VtkViewPanel {
         pressX = position[0];
         pressY = position[1];
         lastRotationAngle = Double.NaN;
-        if (scene.getMeasurementTool() != null) {
+        MeasurementType tool = scene.getMeasurementTool();
+        // 十字线交点洞：任何模式下都可拖动平移中心（作图时也放开）
+        if (scene.isOnHole(pressX, pressY)) {
+            dragMode = DragMode.MOVE_CENTER;
+            measurementToolbar.setHintText("拖动平移十字线中心");
+            return;
+        }
+        // 命中已有图形：拖动即移动该图形（任何模式都优先，避免被当成新作图而"原地留一个"）
+        if (scene.beginMoveMeasurement(pressX, pressY)) {
+            dragMode = DragMode.MOVE_SHAPE;
+            measurementToolbar.setHintText("拖动移动图形（松手生效）");
+            return;
+        }
+        if (tool != null) {
             if (!scene.isVolumeReady()) {
                 return;
             }
-            if (!scene.isAxisAligned()) {
-                setStatus("斜切状态下暂不支持测量（请先用 R 重置或 A 回正）");
+            if (tool.isFreehand()) {
+                // 自由形状：按住拖动描画
+                measurementToolbar.setHintText("描画自由形状（松开闭合）");
+                dragMode = DragMode.DRAW;
+                scene.beginFreehand(pressX, pressY);
                 return;
             }
-            // 测量模式：左键落点
+            if (tool.isPolyline()) {
+                handleCurveClick(pressX, pressY);
+                return;
+            }
+            // 固定点数工具：左键落点
+            measurementToolbar.setHintText(tool.getDisplayName() + "：落点作图");
             scene.addMeasurementPoint(pressX, pressY);
             updateMeasurementResult();
             return;
         }
-        if (scene.isOnHole(pressX, pressY)) {
-            dragMode = DragMode.MOVE_CENTER;
-        } else if (scene.isOnCrosshair(pressX, pressY)) {
+        if (scene.isOnCrosshair(pressX, pressY)) {
             // 锁定起始视图：拖动中指针越界也不会把旋转轴切到别的视图
             dragMode = DragMode.ROTATE;
             rotationView = scene.viewAt(pressX, pressY);
@@ -219,6 +252,19 @@ public final class VtkMprView extends VtkViewPanel {
     }
 
     public void onLeftButtonUp() {
+        if (dragMode == DragMode.MOVE_SHAPE) {
+            scene.endMoveMeasurement();
+            updateMeasurementResult();
+            dragMode = DragMode.NONE;
+            return;
+        }
+        if (dragMode == DragMode.DRAW) {
+            // 自由形状：松开闭合
+            scene.endFreehand();
+            updateMeasurementResult();
+            dragMode = DragMode.NONE;
+            return;
+        }
         if (scene.getMeasurementTool() != null) {
             return;
         }
@@ -226,17 +272,39 @@ public final class VtkMprView extends VtkViewPanel {
         boolean isClick = Math.abs(position[0] - pressX) <= CLICK_MOVE_THRESHOLD
                 && Math.abs(position[1] - pressY) <= CLICK_MOVE_THRESHOLD;
         if (dragMode == DragMode.NONE && isClick) {
-            // 洞外单击：中心直接跳到该点
-            scene.moveCenter(position[0], position[1]);
+            // 单击：命中测量则选中（不移动中心），否则中心跳到该点
+            if (!scene.trySelectMeasurement(position[0], position[1])) {
+                scene.moveCenter(position[0], position[1]);
+            }
+            updateMeasurementResult();
             updateStatus();
         }
         if (dragMode == DragMode.ROTATE) {
-            // 松手后按当前朝向重新取景一次（拖动过程中冻结，见方案 B）
+            // 松手后保持取景冻结（拖动过程中亦冻结，见方案 B）
             scene.endRotation();
         }
         dragMode = DragMode.NONE;
         rotationView = -1;
         lastRotationAngle = Double.NaN;
+    }
+
+    /**
+     * 曲线：逐点累加；检测到双击（≤400ms 且位移 ≤5px）则结束并生成测量。
+     */
+    private void handleCurveClick(int displayX, int displayY) {
+        long now = System.currentTimeMillis();
+        boolean doubleClick = now - lastCurveClickTime <= DOUBLE_CLICK_MILLIS
+                && Math.abs(displayX - lastCurveClickX) <= CLICK_MOVE_THRESHOLD
+                && Math.abs(displayY - lastCurveClickY) <= CLICK_MOVE_THRESHOLD;
+        lastCurveClickTime = now;
+        lastCurveClickX = displayX;
+        lastCurveClickY = displayY;
+        if (doubleClick) {
+            scene.finishMeasurementCurve();
+        } else {
+            scene.addMeasurementPoint(displayX, displayY);
+        }
+        updateMeasurementResult();
     }
 
     /**
@@ -266,18 +334,19 @@ public final class VtkMprView extends VtkViewPanel {
             return;
         }
         scene.rotate(view, clockwise);
-        refreshMeasurementAvailability();
+        updateMeasurementUi();
         lastProbe = scene.probe(displayX, displayY);
         updateStatus();
     }
 
-    private void clearMeasurements() {
-        scene.clearMeasurements();
-        measurementToolbar.setResultText(null);
-    }
-
+    /**
+     * 刷新结果标签：优先显示**选中的**测量，否则显示最近一条。
+     */
     private void updateMeasurementResult() {
-        Measurement measurement = scene.getLastMeasurement();
+        Measurement measurement = scene.getSelectedMeasurement();
+        if (measurement == null) {
+            measurement = scene.getLastMeasurement();
+        }
         measurementToolbar.setResultText(measurement == null ? null : MeasurementFormatter.format(measurement));
     }
 
@@ -304,6 +373,15 @@ public final class VtkMprView extends VtkViewPanel {
         if (scene.getMeasurementTool() != null) {
             scene.updateMeasurementPreview(position[0], position[1]);
         }
+        if (dragMode == DragMode.MOVE_SHAPE) {
+            scene.updateMoveMeasurement(position[0], position[1]);
+            updateMeasurementResult();
+            return;
+        }
+        if (dragMode == DragMode.DRAW) {
+            scene.extendFreehand(position[0], position[1]);
+            return;
+        }
         if (dragMode == DragMode.ROTATE) {
             updateRotation(position[0], position[1]);
             return;
@@ -321,15 +399,79 @@ public final class VtkMprView extends VtkViewPanel {
             windowLevelToolbar.setCurrent(scene.getWindowLevel());
             return;
         }
+        // 悬停选中：指针移到某个图形上即选中它（未命中则取消）
+        if (scene.hoverMeasurement(position[0], position[1])) {
+            updateMeasurementResult();
+        }
         lastProbe = scene.probe(position[0], position[1]);
         updateStatus();
     }
 
+    // ------------------------------------------------------- 工具条回调（MeasurementToolbar.Listener）
+
+    @Override
+    public void onToolSelected(MeasurementType type) {
+        scene.setMeasurementTool(type);
+        measurementToolbar.setCrosshairMode(type == null);
+        measurementToolbar.setHintText(type == null ? " " : type.getDisplayName() + "：左键落点");
+        updateMeasurementResult();
+        requestCanvasFocus();
+    }
+
+    @Override
+    public void onDeleteSelected() {
+        deleteSelectedMeasurement();
+    }
+
+    @Override
+    public void onDeleteAll() {
+        scene.clearMeasurements();
+        measurementToolbar.setResultText(null);
+        measurementToolbar.setHintText("已全部删除");
+        updateMeasurementResult();
+        requestCanvasFocus();
+    }
+
+    @Override
+    public void onResetView() {
+        scene.resetView();
+        updateMeasurementUi();
+        updateStatus();
+    }
+
+    @Override
+    public void onAlignRig() {
+        scene.alignRig();
+        updateMeasurementUi();
+        updateStatus();
+    }
+
     /**
-     * 斜切时禁用测量工具（D2）。
+     * 删除选中的测量；未选中时给出提示。
      */
-    private void refreshMeasurementAvailability() {
-        measurementToolbar.setOblique(!scene.isAxisAligned());
+    private void deleteSelectedMeasurement() {
+        boolean deleted = scene.deleteSelectedMeasurement();
+        measurementToolbar.setHintText(deleted ? "已删除选中测量" : "未选中测量");
+        updateMeasurementResult();
+        requestCanvasFocus();
+    }
+
+    /**
+     * 退出测量模式，回到十字线/平移模式（Esc）。
+     */
+    private void exitMeasurementMode() {
+        scene.setMeasurementTool(null);
+        measurementToolbar.setCrosshairMode(true);
+        measurementToolbar.setHintText(" ");
+        updateMeasurementResult();
+    }
+
+    /**
+     * 刷新测量工具条的显示状态（结果文本 + 十字线模式）。
+     */
+    private void updateMeasurementUi() {
+        measurementToolbar.setCrosshairMode(scene.getMeasurementTool() == null);
+        updateMeasurementResult();
     }
 
     private void updateStatus() {

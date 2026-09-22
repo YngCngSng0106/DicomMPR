@@ -185,6 +185,8 @@ final class StackScene {
 
     void render() {
         canvas.Render();
+        // 同上：按钮/按键触发的刷新需显式请求 AWT 重绘
+        canvas.repaint();
     }
 
     private double relativeDelta(int pixels, int viewSize, double current) {

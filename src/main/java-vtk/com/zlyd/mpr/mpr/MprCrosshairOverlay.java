@@ -98,10 +98,7 @@ public final class MprCrosshairOverlay {
      * @return 本次绘制的线段（供命中判定复用）
      */
     public List<CrosshairSegment> update(MprCursorFrame frame) {
-        ScreenFrame[] screens = new ScreenFrame[VIEW_COUNT];
-        for (int view = 0; view < VIEW_COUNT; view++) {
-            screens[view] = screenFrame(view);
-        }
+        ScreenFrame[] screens = VtkScreenFrames.of(renderers);
         List<CrosshairSegment> segments = CrosshairGeometry.compute(frame, screens, gaps(screens));
         for (CrosshairSegment segment : segments) {
             apply(segment, screens[segment.getView()]);
@@ -109,20 +106,6 @@ public final class MprCrosshairOverlay {
         return segments;
     }
 
-    /**
-     * 由相机读出某视图的屏幕参考系（焦点、屏幕右/上/视线方向、视口半宽高）。
-     */
-    private ScreenFrame screenFrame(int view) {
-        vtkRenderer renderer = renderers[view];
-        vtkCamera camera = renderer.GetActiveCamera();
-        int[] size = renderer.GetSize();
-        double aspect = size[1] > 1 ? (double) size[0] / size[1] : 1.0;
-        double scale = Math.max(camera.GetParallelScale(), 1e-6);
-        double[] direction = camera.GetDirectionOfProjection();
-        double[] up = Vectors.orthogonalize(camera.GetViewUp(), direction);
-        return new ScreenFrame(camera.GetFocalPoint(), Vectors.cross(direction, up), up, direction,
-                scale * aspect, scale);
-    }
 
     /**
      * 隐藏全部十字线（清理 MPR 缓存用）。

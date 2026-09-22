@@ -62,6 +62,92 @@ public final class MeasurementCalculator {
     }
 
     /**
+     * 折线总长度（mm）：相邻点距离之和。
+     *
+     * @param points 点序列（患者坐标）；少于 2 点返回 0
+     */
+    public static double polylineLength(java.util.List<double[]> points) {
+        if (points == null || points.size() < 2) {
+            return 0.0;
+        }
+        double total = 0.0;
+        for (int index = 1; index < points.size(); index++) {
+            total += distance(points.get(index - 1), points.get(index));
+        }
+        return total;
+    }
+
+    /**
+     * 多边形面积（mm²）：把点投影到给定的平面内两轴后用鞋带公式计算。
+     *
+     * @param points 顶点序列（患者坐标，需共面）
+     * @param axis1 平面内方向 1（单位向量）
+     * @param axis2 平面内方向 2（单位向量）
+     * @return 面积（mm²）；少于 3 点返回 0
+     */
+    public static double polygonArea(java.util.List<double[]> points, double[] axis1, double[] axis2) {
+        if (points == null || points.size() < 3) {
+            return 0.0;
+        }
+        double[] origin = points.get(0);
+        double sum = 0.0;
+        for (int index = 0; index < points.size(); index++) {
+            double[] current = project(points.get(index), origin, axis1, axis2);
+            double[] next = project(points.get((index + 1) % points.size()), origin, axis1, axis2);
+            sum += current[0] * next[1] - next[0] * current[1];
+        }
+        return Math.abs(sum) / 2.0;
+    }
+
+    /**
+     * 多边形周长（mm）。
+     */
+    public static double polygonPerimeter(java.util.List<double[]> points) {
+        if (points == null || points.size() < 2) {
+            return 0.0;
+        }
+        double total = distance(points.get(points.size() - 1), points.get(0));
+        return total + polylineLength(points);
+    }
+
+    /**
+     * 判断平面内点是否落在多边形内（射线法）。
+     *
+     * @param i 待判点的平面坐标 1（沿 {@code axis1}，原点为 {@code points} 的第 0 个顶点）
+     * @param j 待判点的平面坐标 2（沿 {@code axis2}）
+     * @param points 多边形顶点（患者坐标，需共面）
+     */
+    public static boolean polygonContains(double i, double j, java.util.List<double[]> points,
+                                          double[] axis1, double[] axis2) {
+        if (points == null || points.size() < 3) {
+            return false;
+        }
+        double[] origin = points.get(0);
+        boolean inside = false;
+        for (int index = 0, previous = points.size() - 1; index < points.size(); previous = index++) {
+            double[] current = project(points.get(index), origin, axis1, axis2);
+            double[] before = project(points.get(previous), origin, axis1, axis2);
+            boolean straddles = (current[1] > j) != (before[1] > j);
+            if (straddles) {
+                double crossI = current[0] + (j - current[1]) / (before[1] - current[1])
+                        * (before[0] - current[0]);
+                if (i < crossI) {
+                    inside = !inside;
+                }
+            }
+        }
+        return inside;
+    }
+
+    /**
+     * 把患者坐标点投影到以 {@code origin} 为原点、{@code axis1/axis2} 为轴的平面坐标。
+     */
+    public static double[] project(double[] point, double[] origin, double[] axis1, double[] axis2) {
+        double[] delta = subtract(point, origin);
+        return new double[]{dot(delta, axis1), dot(delta, axis2)};
+    }
+
+    /**
      * 判断平面内点是否落在矩形 ROI 内（索引坐标）。
      */
     public static boolean rectangleContains(double i, double j,

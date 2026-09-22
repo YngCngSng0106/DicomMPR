@@ -1,6 +1,7 @@
 package com.zlyd.mpr.util;
 
 import com.zlyd.mpr.geometry.Measurement;
+import com.zlyd.mpr.geometry.MeasurementCalculator;
 import com.zlyd.mpr.geometry.RoiStatistics;
 
 /**
@@ -22,6 +23,11 @@ public final class MeasurementFormatter {
                 return String.format("长度 %.1f mm", measurement.getValue());
             case ANGLE:
                 return String.format("角度 %.1f°", measurement.getValue());
+            case CURVE:
+                return String.format("曲线 %.1f mm (%d 点)", measurement.getValue(),
+                        measurement.getPoints().size());
+            case FREEHAND:
+                return formatFreehand(measurement);
             default:
                 return formatRoi(measurement);
         }
@@ -37,6 +43,16 @@ public final class MeasurementFormatter {
                     statistics.getMean(), statistics.getMin(),
                     statistics.getMax(), statistics.getCount()));
         }
+        return text.toString();
+    }
+
+    /**
+     * 自由形状：面积 + 周长 + HU 统计（周长由顶点序列实时计算，无需额外存储）。
+     */
+    private static String formatFreehand(Measurement measurement) {
+        StringBuilder text = new StringBuilder(formatRoi(measurement));
+        text.insert(0, String.format("周长 %.1f mm | ", MeasurementCalculator.polygonPerimeter(
+                measurement.getPoints())));
         return text.toString();
     }
 }

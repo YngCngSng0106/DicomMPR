@@ -2,6 +2,7 @@ package com.zlyd.mpr.mpr;
 
 import com.zlyd.mpr.geometry.MprCursorFrame;
 import com.zlyd.mpr.geometry.MprViewRig;
+import com.zlyd.mpr.geometry.ScreenFrame;
 
 import vtk.vtkImageData;
 import vtk.vtkImageInterpolator;
@@ -23,13 +24,22 @@ final class MprSlicePlaneActors {
 
     private static final int VIEW_COUNT = MprViewRig.VIEW_COUNT;
     private static final int IMAGE_SAMPLE_FACTOR = 2;
+    /**
+     * 切片图像沿视线方向后退的比例（占视口半高，约 1 像素）。
+     *
+     * <p>平行投影下"沿视线平移"在画面上看不出任何变化，但深度上能让与图像共面的
+     * 十字线/测量轮廓稳定压在其上（否则深度测试平手，线会被图像压掉）。</p>
+     */
+    private static final double DEPTH_NUDGE_RATIO = 0.002;
 
     private final vtkPlane[] planes = new vtkPlane[VIEW_COUNT];
     private final vtkImageResliceMapper[] mappers = new vtkImageResliceMapper[VIEW_COUNT];
     private final vtkImageSlice[] slices = new vtkImageSlice[VIEW_COUNT];
     private final vtkImageInterpolator interpolator = new vtkImageInterpolator();
+    private final vtkRenderer[] renderers;
 
     MprSlicePlaneActors(vtkRenderer[] renderers) {
+        this.renderers = renderers;
         interpolator.SetInterpolationModeToLinear();
         for (int view = 0; view < VIEW_COUNT; view++) {
             vtkPlane plane = new vtkPlane();
@@ -113,6 +123,12 @@ final class MprSlicePlaneActors {
             double[] normal = frame.axis(view);
             planes[view].SetOrigin(center[0], center[1], center[2]);
             planes[view].SetNormal(normal[0], normal[1], normal[2]);
+            // 图像沿视线方向后退约 1 像素：画面无变化，但共面的十字线/测量轮廓不再被压掉
+            ScreenFrame screen = VtkScreenFrames.of(renderers[view]);
+            double[] direction = screen.getViewDirection();
+            double nudge = DEPTH_NUDGE_RATIO * screen.getHalfHeight();
+            slices[view].SetPosition(direction[0] * nudge, direction[1] * nudge,
+                    direction[2] * nudge);
         }
     }
 
