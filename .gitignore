@@ -1,6 +1,9 @@
 # Maven
 target/
 
+# 打包产物（scripts\package.ps1 生成）
+dist/
+
 # VTK 源码与构建产物（体积巨大，不入库）
 third_party/
 
