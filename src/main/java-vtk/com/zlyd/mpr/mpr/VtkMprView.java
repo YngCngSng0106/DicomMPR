@@ -1,6 +1,10 @@
 package com.zlyd.mpr.mpr;
 
+import java.awt.AWTEvent;
+import java.awt.Toolkit;
+import java.awt.event.AWTEventListener;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 
 import javax.swing.JButton;
 import javax.swing.SwingUtilities;
@@ -57,6 +61,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
     private int pressY;
     private int lastRightX;
     private int lastRightY;
+    private AWTEventListener strayDragWatchdog;
 
     public VtkMprView() {
         super("在左侧序列上右键，选择「MPR」打开三视图");
@@ -103,8 +108,8 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
     public void clearVolume() {
         series = null;
         lastProbe = null;
-        dragMode = DragMode.NONE;
-        rotationView = -1;
+        resetDrag();
+        uninstallStrayDragWatchdog();
         scene.clearVolume();
         measurementToolbar.setResultText(null);
         updateMeasurementUi();
@@ -135,10 +140,26 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
         return scene.isVolumeReady();
     }
 
+    /**
+     * 当前光标坐标系中心的世界坐标（供 GUI 校验断言"中心是否被误拖动"）。
+     */
+    public double[] getCenterWorld() {
+        MprCursorFrame frame = scene.getFrame();
+        return frame == null ? null : frame.center();
+    }
+
+    /**
+     * 某视图里十字线交点的屏幕坐标（供 GUI 校验模拟"拖中心"）。
+     */
+    public double[] centerDisplay(int view) {
+        return scene.centerDisplay(view);
+    }
+
     @Override
     protected void onVolumeReady(BuiltVolume volume, SeriesInfo target) {
         this.series = target;
         scene.setVolume(volume, target);
+        installStrayDragWatchdog();
         windowLevelToolbar.setCurrent(scene.getWindowLevel());
         updateMeasurementUi();
         updateStatus();
@@ -255,17 +276,20 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
         if (dragMode == DragMode.MOVE_SHAPE) {
             scene.endMoveMeasurement();
             updateMeasurementResult();
-            dragMode = DragMode.NONE;
+            resetDrag();
             return;
         }
         if (dragMode == DragMode.DRAW) {
             // 自由形状：松开闭合
             scene.endFreehand();
             updateMeasurementResult();
-            dragMode = DragMode.NONE;
+            resetDrag();
             return;
         }
         if (scene.getMeasurementTool() != null) {
+            // 工具激活时也必须复位：按下可能命中十字线洞（MOVE_CENTER）或十字线（ROTATE），
+            // 不复位会让中心一直跟着鼠标走、无法释放。
+            resetDrag();
             return;
         }
         int[] position = getInteractor().GetEventPosition();
@@ -283,9 +307,59 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
             // 松手后保持取景冻结（拖动过程中亦冻结，见方案 B）
             scene.endRotation();
         }
+        resetDrag();
+    }
+
+    /**
+     * 复位左键拖动状态（每次松开都必须调用，否则状态残留会让中心跟着鼠标走）。
+     */
+    private void resetDrag() {
         dragMode = DragMode.NONE;
         rotationView = -1;
         lastRotationAngle = Double.NaN;
+    }
+
+    /**
+     * 注册"游离拖动"兜底监听：鼠标在画布外松开（工具条、下拉框、窗口外）时 VTK 收不到
+     * 松开事件，拖动状态会一直保持（表现为十字线中心跟着鼠标走且无法释放）。
+     */
+    private void installStrayDragWatchdog() {
+        if (strayDragWatchdog != null) {
+            return;
+        }
+        strayDragWatchdog = event -> {
+            if (event.getID() == MouseEvent.MOUSE_RELEASED) {
+                // 延后到事件派发结束：画布内的松开会先走 onLeftButtonUp 复位，
+                // 这里只在"状态仍残留"时才收尾。
+                SwingUtilities.invokeLater(this::endStrayDrag);
+            }
+        };
+        Toolkit.getDefaultToolkit().addAWTEventListener(strayDragWatchdog,
+                AWTEvent.MOUSE_EVENT_MASK);
+    }
+
+    private void uninstallStrayDragWatchdog() {
+        if (strayDragWatchdog == null) {
+            return;
+        }
+        Toolkit.getDefaultToolkit().removeAWTEventListener(strayDragWatchdog);
+        strayDragWatchdog = null;
+    }
+
+    /**
+     * 收尾一次未正常结束的拖动（画布外的松开）。
+     */
+    private void endStrayDrag() {
+        if (dragMode == DragMode.MOVE_SHAPE) {
+            scene.endMoveMeasurement();
+            updateMeasurementResult();
+        } else if (dragMode == DragMode.DRAW) {
+            scene.endFreehand();
+            updateMeasurementResult();
+        } else if (dragMode == DragMode.ROTATE) {
+            scene.endRotation();
+        }
+        resetDrag();
     }
 
     /**
@@ -411,6 +485,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
 
     @Override
     public void onToolSelected(MeasurementType type) {
+        resetDrag();
         scene.setMeasurementTool(type);
         measurementToolbar.setCrosshairMode(type == null);
         measurementToolbar.setHintText(type == null ? " " : type.getDisplayName() + "：左键落点");
@@ -425,6 +500,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
 
     @Override
     public void onDeleteAll() {
+        resetDrag();
         scene.clearMeasurements();
         measurementToolbar.setResultText(null);
         measurementToolbar.setHintText("已全部删除");
@@ -450,6 +526,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
      * 删除选中的测量；未选中时给出提示。
      */
     private void deleteSelectedMeasurement() {
+        resetDrag();
         boolean deleted = scene.deleteSelectedMeasurement();
         measurementToolbar.setHintText(deleted ? "已删除选中测量" : "未选中测量");
         updateMeasurementResult();
@@ -460,6 +537,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
      * 退出测量模式，回到十字线/平移模式（Esc）。
      */
     private void exitMeasurementMode() {
+        resetDrag();
         scene.setMeasurementTool(null);
         measurementToolbar.setCrosshairMode(true);
         measurementToolbar.setHintText(" ");
