@@ -1,6 +1,7 @@
 package com.zlyd.mpr.mpr;
 
 import java.awt.AWTEvent;
+import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.AWTEventListener;
 import java.awt.event.KeyEvent;
@@ -18,6 +19,8 @@ import com.zlyd.mpr.geometry.MprCursorFrame;
 import com.zlyd.mpr.geometry.VoxelProbe;
 import com.zlyd.mpr.ui.MeasurementToolbar;
 import com.zlyd.mpr.ui.WindowLevelToolbar;
+import com.zlyd.mpr.ui.menu.MprMenuAction;
+import com.zlyd.mpr.ui.menu.MprRingMenu;
 import com.zlyd.mpr.util.MeasurementFormatter;
 
 
@@ -46,6 +49,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
     private final MprScene scene;
     private final WindowLevelToolbar windowLevelToolbar = new WindowLevelToolbar();
     private final MeasurementToolbar measurementToolbar = new MeasurementToolbar();
+    private final MprRingMenu ringMenu = new MprRingMenu();
 
     private SeriesInfo series;
     private Runnable closeListener;
@@ -59,6 +63,8 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
     private boolean rightDown;
     private int pressX;
     private int pressY;
+    private int pressRightX;
+    private int pressRightY;
     private int lastRightX;
     private int lastRightY;
     private AWTEventListener strayDragWatchdog;
@@ -71,6 +77,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
         getPrimaryRow().add(windowLevelToolbar);
         getPrimaryRow().add(createClearButton());
         addToolbarRow(measurementToolbar);
+        ringMenu.setListener(this::onMenuAction);
 
         getInteractor().AddObserver("MouseWheelForwardEvent", this, "onWheelForward");
         getInteractor().AddObserver("MouseWheelBackwardEvent", this, "onWheelBackward");
@@ -110,6 +117,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
         lastProbe = null;
         resetDrag();
         uninstallStrayDragWatchdog();
+        ringMenu.hideMenu();
         scene.clearVolume();
         measurementToolbar.setResultText(null);
         updateMeasurementUi();
@@ -175,6 +183,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
 
     @Override
     protected void onViewResized() {
+        ringMenu.hideMenu();
         scene.refitCameras();
     }
 
@@ -196,6 +205,7 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
                 deleteSelectedMeasurement();
                 break;
             case KeyEvent.VK_ESCAPE:
+                ringMenu.hideMenu();
                 exitMeasurementMode();
                 break;
             case KeyEvent.VK_ENTER:
@@ -427,19 +437,50 @@ public final class VtkMprView extends VtkViewPanel implements MeasurementToolbar
     public void onRightButtonDown() {
         int[] position = getInteractor().GetEventPosition();
         rightDown = true;
+        pressRightX = position[0];
+        pressRightY = position[1];
         lastRightX = position[0];
         lastRightY = position[1];
     }
 
     public void onRightButtonUp() {
         int[] position = getInteractor().GetEventPosition();
-        boolean isClick = Math.abs(position[0] - lastRightX) <= CLICK_MOVE_THRESHOLD
-                && Math.abs(position[1] - lastRightY) <= CLICK_MOVE_THRESHOLD;
-        if (rightDown && isClick && scene.getMeasurementTool() != null) {
+        boolean isClick = Math.abs(position[0] - pressRightX) <= CLICK_MOVE_THRESHOLD
+                && Math.abs(position[1] - pressRightY) <= CLICK_MOVE_THRESHOLD;
+        boolean wasDown = rightDown;
+        rightDown = false;
+        if (!wasDown || !isClick) {
+            // 右键拖动已用于调窗，不弹菜单
+            return;
+        }
+        if (scene.getMeasurementTool() != null) {
             // 测量模式下右键单击：取消未完成的测量
             scene.cancelPending();
         }
-        rightDown = false;
+        showRingMenu(position[0], position[1]);
+    }
+
+    /**
+     * 在鼠标点弹出环形菜单（以点为中心，并收敛到窗口内）。
+     *
+     * @param displayX VTK 显示坐标 X（画布左上原点）
+     * @param displayY VTK 显示坐标 Y（画布左下原点）
+     */
+    private void showRingMenu(int displayX, int displayY) {
+        int canvasX = displayX;
+        int canvasY = getCanvas().getHeight() - displayY;
+        Point location = new Point(canvasX, canvasY);
+        SwingUtilities.convertPointToScreen(location, getCanvas());
+        ringMenu.showAt(this, location);
+    }
+
+    /**
+     * 菜单功能回调：目前仅提示"待接入"，后续在此逐项接入 MprScene 能力。
+     */
+    private void onMenuAction(MprMenuAction action) {
+        String message = "「" + action.getDisplayName() + "」功能待接入";
+        measurementToolbar.setHintText(message);
+        setStatus(message);
     }
 
     public void onMouseMove() {
