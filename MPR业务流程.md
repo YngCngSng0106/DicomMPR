@@ -359,11 +359,12 @@ ROI 取样按"平面 mm 坐标 → 世界 → 体素索引 → 三线性取值"�
 
 | 目的 | 命令/入口 |
 | --- | --- |
-| 单元测试（27 个） | `mvn test` |
-| 数据层报告（M1） | `mvn -q exec:java "-Dexec.mainClass=com.zlyd.mpr.m1.M1Main" "-Dexec.args=<目录>"` |
-| 缩略图校验（M2） | `mvn -q exec:java "-Dexec.mainClass=com.zlyd.mpr.m2.M2ThumbnailCheck" "-Dexec.args=<目录>"` |
-| 体数据/单平面校验 | `com.zlyd.mpr.m2.M2VolumeCheck`（`-Pvtk`） |
-| MPR 校验（离屏 + 方向断言 + HU 采样 + 测量示例） | `com.zlyd.mpr.m2.M3MprCheck`（`-Pvtk`） |
+| 单元测试 | `mvn test` |
+| 数据层报告（M1） | `powershell -ExecutionPolicy Bypass -File scripts\run-check.ps1 data <目录>` |
+| 缩略图校验（M2） | `powershell -ExecutionPolicy Bypass -File scripts\run-check.ps1 thumb <目录>` |
+| 体数据/单平面校验 | `powershell -ExecutionPolicy Bypass -File scripts\run-check.ps1 volume [目录]` |
+| MPR 校验（离屏 + 方向断言 + HU 采样 + 测量示例） | `powershell -ExecutionPolicy Bypass -File scripts\run-check.ps1 mpr [目录]` |
 | 启动 GUI | `powershell -ExecutionPolicy Bypass -File scripts\run-app.ps1 [影像目录]` |
 
-> 注意：`mvn test`（默认 profile）会清理 `-Pvtk` 的编译产物；运行 GUI/离屏校验前先执行一次 `mvn -Pvtk -DskipTests compile`（`run-app.ps1` 已包含）。
+> 注意：M0/M1/M2/M3 校验入口位于 `src/verify`，由 `-Pvtk,verify` profile 编译到 `target/test-classes`，不会进入产品包。
+> `run-check.ps1` 与 `verify.ps1` 已自动处理编译；手工执行时用 `mvn -Pvtk,verify -DskipTests clean test-compile`。

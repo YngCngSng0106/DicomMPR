@@ -327,8 +327,7 @@ dicom-mpr-demo/
 
 ```powershell
 # 在项目根目录执行；测试数据用相对路径（JAVA_HOME 需指向 JDK 17）
-$env:JAVA_HOME = "<JDK17-目录>"
-mvn -q exec:java "-Dexec.mainClass=com.zlyd.mpr.m1.M1Main" "-Dexec.args=3120221229008001"
+powershell -ExecutionPolicy Bypass -File scripts\run-check.ps1 data 3120221229008001
 ```
 
 结果摘要：

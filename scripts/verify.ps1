@@ -3,7 +3,7 @@
 # Runs, in order:
 #   1. standards scan   (UTF-8 BOM, System.out/err, printStackTrace, catch(Exception|Throwable))
 #   2. unit tests       (mvn test)
-#   3. -Pvtk compile
+#   3. product + verify compile (-Pvtk,verify)
 #   4. offscreen checks (only those whose class exists; skipped with -SkipChecks)
 #
 # Usage:
@@ -63,9 +63,9 @@ try {
         ForEach-Object { Write-Host $_.Trim() }
     if ($LASTEXITCODE -ne 0) { $failures += "unit tests"; Write-Host "unit tests FAILED" }
 
-    # --- 3. -Pvtk compile ---------------------------------------------------
-    Write-Host "== [3/4] compile (-Pvtk) =="
-    mvn -B -q -Pvtk -DskipTests compile
+    # --- 3. product + verify compile (-Pvtk,verify) ---------------------------
+    Write-Host "== [3/4] compile (-Pvtk,verify) =="
+    mvn -B -q "-Pvtk,verify" -DskipTests clean test-compile
     if ($LASTEXITCODE -ne 0) { $failures += "vtk compile"; Write-Host "compile FAILED" }
 
     # --- 4. offscreen checks ------------------------------------------------
@@ -77,7 +77,7 @@ try {
         }
         $core = Join-Path $VtkBuild "bin\Release"
         $jni  = Join-Path $VtkBuild "lib\java\vtk-Windows-AMD64\Release"
-        $cp   = "target\classes;" + (Get-Content target\cp-vtk.txt -Raw).Trim()
+        $cp   = "target\classes;target\test-classes;" + (Get-Content target\cp-vtk.txt -Raw).Trim()
         $env:PATH = "$core;$jni;$JdkHome\bin;$env:PATH"
 
         # Data directory is optional: checks fall back to the working directory.
@@ -97,7 +97,7 @@ try {
             @{ Class = "com.zlyd.mpr.m2.M3ResliceCheck"; Args = $dataArgs }
         )
         foreach ($check in $checks) {
-            $classFile = Join-Path "target\classes" (($check.Class -replace "\.", "\") + ".class")
+            $classFile = Join-Path "target\test-classes" (($check.Class -replace "\.", "\") + ".class")
             if (-not (Test-Path -LiteralPath $classFile)) {
                 Write-Host ("-- skip {0} (not built yet)" -f $check.Class)
                 continue

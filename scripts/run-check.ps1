@@ -1,4 +1,4 @@
-# Run any check main in -Pvtk mode (compiles first, then runs).
+# Run any verification main from src/verify (compiles product + verify, then runs).
 #
 # Paths are derived from this script's location; JAVA_HOME is auto-detected.
 # Checks are selected by a short name (see -List) or by full class name.
@@ -28,6 +28,10 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "env.ps1")
 
 $aliases = [ordered]@{
+    "data"           = "com.zlyd.mpr.m1.M1Main"
+    "thumb"          = "com.zlyd.mpr.m2.M2ThumbnailCheck"
+    "ui-m2"          = "com.zlyd.mpr.m2.M2UiSmoke"
+    "ui-m3"          = "com.zlyd.mpr.m2.M3UiSmoke"
     "smoke"          = "com.zlyd.mpr.m2.M0ResliceSmoke"
     "volume"         = "com.zlyd.mpr.m2.M2VolumeCheck"
     "mpr"            = "com.zlyd.mpr.m2.M3MprCheck"
@@ -86,8 +90,8 @@ foreach ($p in @($core, $jni)) {
 
 Push-Location $ProjectDir
 try {
-    Write-Host "== compile (-Pvtk) =="
-    mvn -B -q -Pvtk -DskipTests compile
+    Write-Host "== compile product + verify (-Pvtk,verify) =="
+    mvn -B -q "-Pvtk,verify" -DskipTests clean test-compile
     if ($LASTEXITCODE -ne 0) { throw "compile failed" }
 
     if (-not (Test-Path "target\cp-vtk.txt")) {
@@ -96,7 +100,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "build-classpath failed" }
     }
 
-    $cp = "target\classes;" + (Get-Content target\cp-vtk.txt -Raw).Trim()
+    $cp = "target\classes;target\test-classes;" + (Get-Content target\cp-vtk.txt -Raw).Trim()
 
     # jawt.dll (JDK) + core DLLs + JNI libraries must all be discoverable
     $env:PATH = "$core;$jni;$JdkHome\bin;$env:PATH"

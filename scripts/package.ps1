@@ -51,8 +51,8 @@ foreach ($tool in @("bin\javac.exe", "bin\jlink.exe", "jmods")) {
 
 Push-Location $ProjectRoot
 try {
-    Write-Host "== build app (mvn -Pvtk package) =="
-    mvn -B -q -Pvtk -DskipTests package
+    Write-Host "== build app (mvn -Pvtk clean package) =="
+    mvn -B -q -Pvtk -DskipTests clean package
     if ($LASTEXITCODE -ne 0) { throw "maven package failed" }
 
     Write-Host "== collect runtime dependencies =="
@@ -127,11 +127,16 @@ try {
         if (-not (Test-Path -LiteralPath $dataDir)) {
             Write-Host "   skipped: no test data at $dataDir"
         } else {
+            Write-Host "== compile verify checks (mvn -Pvtk,verify test-compile) =="
+            mvn -B -q "-Pvtk,verify" -DskipTests test-compile
+            if ($LASTEXITCODE -ne 0) { throw "verify compile failed" }
+
             $env:PATH = "$vtkStage;$(Join-Path $runtime "bin");$env:PATH"
             $env:JAVA_HOME = $runtime
             $log = Join-Path $env:TEMP "dicom-mpr-package-check.log"
+            $verifyCp = "$(Join-Path $stage 'lib')\*;$(Join-Path $ProjectRoot 'target\test-classes')"
             & (Join-Path $runtime "bin\java.exe") "-Dfile.encoding=UTF-8" `
-                "-Djava.library.path=$vtkStage" -cp "$(Join-Path $stage 'lib')\*" `
+                "-Djava.library.path=$vtkStage" -cp $verifyCp `
                 com.zlyd.mpr.m2.M0ResliceSmoke $dataDir *> $log
             $exit = $LASTEXITCODE
             $line = (Select-String -LiteralPath $log -Pattern "S0" |

@@ -133,5 +133,39 @@
                 </plugins>
             </build>
         </profile>
+
+        <!--
+          里程碑/回归校验入口（M0/M1/M2/M3）：
+          与产品源码隔离在 src/verify 下，按测试源码编译到 target/test-classes，
+          不会进入产品 jar。必须与 vtk profile 同时启用：
+          mvn -Pvtk,verify -DskipTests test-compile
+        -->
+        <profile>
+            <id>verify</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>add-verify-sources</id>
+                                <phase>generate-test-sources</phase>
+                                <goals>
+                                    <goal>add-test-source</goal>
+                                </goals>
+                                <configuration>
+                                    <sources>
+                                        <source>src/verify/java</source>
+                                        <source>src/verify/java-vtk</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 </project>

@@ -38,15 +38,15 @@ try {
     mvn -B -q install:install-file "-Dfile=$jar" "-DgroupId=org.vtk" "-DartifactId=vtk" "-Dversion=$VtkVersion" "-Dpackaging=jar"
     if ($LASTEXITCODE -ne 0) { throw "install-file failed" }
 
-    Write-Host "== compile (-Pvtk) =="
-    mvn -B -q -Pvtk -DskipTests compile
+    Write-Host "== compile product + verify (-Pvtk,verify) =="
+    mvn -B -q "-Pvtk,verify" -DskipTests clean test-compile
     if ($LASTEXITCODE -ne 0) { throw "compile failed" }
 
     Write-Host "== build runtime classpath =="
     mvn -B -q -Pvtk dependency:build-classpath "-Dmdep.outputFile=target\cp.txt"
     if ($LASTEXITCODE -ne 0) { throw "build-classpath failed" }
 
-    $cp = "target\classes;" + (Get-Content target\cp.txt -Raw).Trim()
+    $cp = "target\classes;target\test-classes;" + (Get-Content target\cp.txt -Raw).Trim()
 
     # jawt.dll (JDK) + core DLLs + JNI libraries must all be discoverable
     $env:PATH = "$core;$jni;$JdkHome\bin;$env:PATH"
